@@ -11,32 +11,28 @@ import java.util.ArrayList;
 
 public class DBHelper extends SQLiteOpenHelper {
 
-    // Start version with 1
-    // increment by 1 whenever db schema changes.
-    private static final int DATABASE_VER = 1;
-    // Filename of the database
-    private static final String DATABASE_NAME = "note.db";
-
+    private static final String DATABASE_NAME = "notes.db";
+    private static final int DATABASE_VERSION = 2;
     private static final String TABLE_NOTE = "note";
     private static final String COLUMN_ID = "_id";
-    private static final String COLUMN_CONTENT = "noteContent";
+    private static final String COLUMN_NOTE_CONTENT = "note_content";
 
     public DBHelper(Context context) {
-        super(context, DATABASE_NAME, null, DATABASE_VER);
+        super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
         String createNoteTableSql = "CREATE TABLE " + TABLE_NOTE + "("
                 + COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT,"
-                + COLUMN_CONTENT + " TEXT ) ";
+                + COLUMN_NOTE_CONTENT + " TEXT ) ";
         db.execSQL(createNoteTableSql);
         Log.i("info", "created tables");
 
         //Dummy records, to be inserted when the database is created
         for (int i = 0; i< 4; i++) {
             ContentValues values = new ContentValues();
-            values.put(COLUMN_CONTENT, "Data number " + i);
+            values.put(COLUMN_NOTE_CONTENT, "Data number " + i);
             db.insert(TABLE_NOTE, null, values);
         }
         Log.i("info", "dummy records inserted");
@@ -45,83 +41,78 @@ public class DBHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Drop older table if existed
-        db.execSQL("DROP TABLE IF EXISTS " + TABLE_NOTE);
-        // Create table(s) again
-        onCreate(db);
+        db.execSQL("ALTER TABLE " + TABLE_NOTE + " ADD COLUMN module_name TEXT ");
     }
 
-    public long insertNote(String content){
-
-        // Get an instance of the database for writing
+    public long insertNote(String noteContent) {
         SQLiteDatabase db = this.getWritableDatabase();
-        // We use ContentValues object to store the values for
-        //  the db operation
         ContentValues values = new ContentValues();
-        // Store the column name as key and the description as value
-        values.put(COLUMN_CONTENT, content);
-        // Insert the row into the TABLE_TASK
+        values.put(COLUMN_NOTE_CONTENT, noteContent);
         long result = db.insert(TABLE_NOTE, null, values);
         if (result == -1){
             Log.d("DBHelper", "Insert failed");
         }
-
-        // Close the database connection
         db.close();
-
+        Log.d("SQL Insert ",""+ result); //id returned, shouldn’t be -1
         return result;
     }
 
-    public ArrayList<String> getNoteContent() {
-        // Create an ArrayList that holds String objects
+    public ArrayList<String> getAllNotes() {
         ArrayList<String> notes = new ArrayList<String>();
-        // Select all the tasks' description
-        String selectQuery = "SELECT " + COLUMN_ID + ", " + COLUMN_CONTENT
-                + " FROM " + TABLE_NOTE;
 
-        // Get the instance of database to read
+        String selectQuery = "SELECT " + COLUMN_ID + ","
+                + COLUMN_NOTE_CONTENT + " FROM " + TABLE_NOTE;
+
         SQLiteDatabase db = this.getReadableDatabase();
-        // Run the SQL query and get back the Cursor object
         Cursor cursor = db.rawQuery(selectQuery, null);
-
-        // moveToFirst() moves to first row
         if (cursor.moveToFirst()) {
-            // Loop while moveToNext() points to next row
-            //  and returns true; moveToNext() returns false
-            //  when no more next row to move to
             do {
-                // Add the task content to the ArrayList object
-                //  0 in getString(0) return the data in the first
-                //  column in the Cursor object. getString(1)
-                //  return second column data and so on.
-                //  Use getInt(0) if data is an int
                 int id = cursor.getInt(0);
                 String content = cursor.getString(1);
-                notes.add("ID: " + id + ", " + content);
+                notes.add("ID:" + id + ", " + content);
             } while (cursor.moveToNext());
         }
-        // Close connection
         cursor.close();
         db.close();
-
         return notes;
     }
 
-    public ArrayList<Note> getNote() {
+    public int updateNote(Note data){
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_NOTE_CONTENT, data.getNoteContent());
+        String condition = COLUMN_ID + "= ?";
+        String[] args = {String.valueOf(data.getId())};
+        int result = db.update(TABLE_NOTE, values, condition, args);
+        db.close();
+        return result;
+    }
+
+    public int deleteNote(int id){
+        SQLiteDatabase db = this.getWritableDatabase();
+        String condition = COLUMN_ID + "= ?";
+        String[] args = {String.valueOf(id)};
+        int result = db.delete(TABLE_NOTE, condition, args);
+        db.close();
+        return result;
+    }
+
+    public ArrayList<Note> getAllNotes(String keyword) {
         ArrayList<Note> notes = new ArrayList<Note>();
-        String selectQuery = "SELECT " + COLUMN_ID + ", "
-                + COLUMN_CONTENT
-                + " FROM " + TABLE_NOTE;
 
         SQLiteDatabase db = this.getReadableDatabase();
-        Cursor cursor = db.rawQuery(selectQuery, null);
+        String[] columns= {COLUMN_ID, COLUMN_NOTE_CONTENT};
+        String condition = COLUMN_NOTE_CONTENT + " Like ?";
+        String[] args = { "%" +  keyword + "%"};
+        Cursor cursor = db.query(TABLE_NOTE, columns, condition, args,
+                null, null, null, null);
 
         if (cursor.moveToFirst()) {
             do {
                 int id = cursor.getInt(0);
-                String content = cursor.getString(1);
-                Note obj = new Note(id, content);
-                notes.add(obj);
+                String noteContent = cursor.getString(1);
+                Note note = new Note(id, noteContent);
+                notes.add(note);
             } while (cursor.moveToNext());
         }
         cursor.close();
